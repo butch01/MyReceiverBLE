@@ -1,10 +1,17 @@
-#include <SoftwareSerial.h>
 #include <FastCRC.h>
 #include <EnhancedServo.h>
 #include "MotorDriverTB6612FNG.h"
 #include "Servo.h"
+#include "SoftwareSerial.h"
 
-SoftwareSerial BTHM10(A3, A4); // RX, TX
+
+#define IS_DEBUG 1
+
+
+SoftwareSerial BTHM10(A4, A5); // RX, TX
+#define BLE_BAUD 19200
+
+#define SERIAL_BAUD 19200
 
 // Protocol definition
 #define PROT_ARRAY_LENGTH 17
@@ -44,30 +51,45 @@ const unsigned long protocolTimeout = PROT_TIMEOUT;
 
 
 //  STEERING SERVO
-#define STEERING_SERVO_PIN 6 // need to use PWM Port
-#define STEERING_SERVO_LEFT_MAX 2
-#define STEERING_SERVO_RIGHT_MAX 180
+#define STEERING_SERVO_PIN 10 // need to use PWM Port
+#define STEERING_SERVO_LEFT_MAX 25
+#define STEERING_SERVO_RIGHT_MAX 1
 #define STEERING_SERVO_TRIM 0
+
+#define DEJITTER_STEPS 10
 
 //EnhancedServo steeringServo;
 EnhancedServo steeringServo;
 
 
 // MOTOR DRIVER TB6612FNG
-#define MOTOR_1_IN_1 4
-#define MOTOR_1_IN_2 7
-#define MOTOR_1_PWM 3
-#define MOTOR_1_STDBY 8
 
-#define MOTOR_2_IN_1 12
-#define MOTOR_2_IN_2 13
-#define MOTOR_2_PWM 5
-#define MOTOR_2_STDBY  8
+#define MOTOR_1_PWM 9
+#define MOTOR_1_IN_1 8
+#define MOTOR_1_IN_2 7
+#define MOTOR_1_STDBY 6
+
+#define MOTOR_2_IN_1 5
+#define MOTOR_2_IN_2 4
+#define MOTOR_2_PWM 3
+#define MOTOR_2_STDBY  6
 
 MotorDriverTB6612FNG motor;
 
 
+void debug(char *logString)
+{
+	#ifdef IS_DEBUG
+		Serial.print(logString);
+	#endif
+}
 
+void debug(long longValue)
+{
+	#ifdef IS_DEBUG
+		Serial.print(longValue);
+	#endif
+}
 
 
 // CRC
@@ -86,7 +108,7 @@ void swapMessage()
 
 void setup() {
   // Open serial communications and wait for port to open:
-  Serial.begin(115200);
+  Serial.begin(SERIAL_BAUD);
   while (!Serial)
   {
     ; // wait for serial port to connect. Needed for native USB port only
@@ -101,7 +123,7 @@ void setup() {
   }
 
   // set the data rate for the SoftwareSerial port
-  BTHM10.begin(38400);
+  BTHM10.begin(BLE_BAUD);
   BTHM10.println("AT+ROLE0");
   delay(200);
   BTHM10.println("AT+POWE2");
@@ -274,11 +296,37 @@ void loop() { // run over and over
 			Serial.print(F("in: "));
 			Serial.print(message[PROT_STICK_RX],DEC);
 			Serial.print(F("   "));
-			steeringServo.enhancedWrite(message[PROT_STICK_RX]);
+
+
+
+			uint8_t steering = message[PROT_STICK_RX];
+			debug ("steering org: ");
+			debug (steering);
+
+			// dejitter servo by just having 10 steps per direction
+			if (steering < 127)
+			{
+				steering = (uint8_t) map(map (steering, 0, 126, 0, DEJITTER_STEPS),0,DEJITTER_STEPS,0,126);
+			}
+			else if (steering > 127)
+			{
+				steering = (uint8_t) map(map (steering, 128, 255, 0, DEJITTER_STEPS),0,DEJITTER_STEPS,128,255);
+			}
+			debug (" dejitter: ");
+			debug (steering);
+
+
+			// reverse
+			steering = map(steering,0,255,255,0);
+			steeringServo.enhancedWrite(steering);
+
 			//uint8_t steeringValue = map((int) message[PROT_STICK_RX], 0, 255, 0, 180);
 			//steeringServo.write((int) message[PROT_STICK_RX]);
 			//steeringServo.write(steeringValue);
 
+			debug (" motor: ");
+			debug (message[PROT_STICK_LY]);
+			debug ( "\n");
 
 			// update motor
 			motor.movePWMTwoWay(message[PROT_STICK_LY], 0, 255);
