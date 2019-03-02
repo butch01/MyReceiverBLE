@@ -5,13 +5,13 @@
 #include "SoftwareSerial.h"
 
 
-#define IS_DEBUG 1
+#define IS_DEBUG 0
 
 
 SoftwareSerial BTHM10(A4, A5); // RX, TX
-#define BLE_BAUD 19200
+#define BLE_BAUD 38400
 
-#define SERIAL_BAUD 19200
+#define SERIAL_BAUD 57600
 
 // Protocol definition
 #define PROT_ARRAY_LENGTH 17
@@ -53,10 +53,10 @@ const unsigned long protocolTimeout = PROT_TIMEOUT;
 //  STEERING SERVO
 #define STEERING_SERVO_PIN 10 // need to use PWM Port
 #define STEERING_SERVO_LEFT_MAX 25
-#define STEERING_SERVO_RIGHT_MAX 1
+#define STEERING_SERVO_RIGHT_MAX 155
 #define STEERING_SERVO_TRIM 0
 
-#define DEJITTER_STEPS 10
+#define DEJITTER_STEPS 100
 
 //EnhancedServo steeringServo;
 EnhancedServo steeringServo;
@@ -64,29 +64,29 @@ EnhancedServo steeringServo;
 
 // MOTOR DRIVER TB6612FNG
 
-#define MOTOR_1_PWM 9
-#define MOTOR_1_IN_1 8
-#define MOTOR_1_IN_2 7
-#define MOTOR_1_STDBY 6
+#define MOTOR_2_PWM 9
+#define MOTOR_2_IN_1 8
+#define MOTOR_2_IN_2 7
+#define MOTOR_2_STDBY 6
 
-#define MOTOR_2_IN_1 5
-#define MOTOR_2_IN_2 4
-#define MOTOR_2_PWM 3
-#define MOTOR_2_STDBY  6
+#define MOTOR_1_IN_1 5
+#define MOTOR_1_IN_2 4
+#define MOTOR_1_PWM 3
+#define MOTOR_1_STDBY  6
 
 MotorDriverTB6612FNG motor;
 
 
 void debug(char *logString)
 {
-	#ifdef IS_DEBUG
+	#if IS_DEBUG == 1
 		Serial.print(logString);
 	#endif
 }
 
 void debug(long longValue)
 {
-	#ifdef IS_DEBUG
+	#if IS_DEBUG == 1
 		Serial.print(longValue);
 	#endif
 }
@@ -274,7 +274,7 @@ void loop() { // run over and over
 		if (isTimeout())
 		{
 			// set message as invalid
-			Serial.println("timeout");
+			//Serial.println("timeout");
 			isMessageValid = false;
 			processEmergencyProtocolTimeout();
 		}
@@ -293,9 +293,9 @@ void loop() { // run over and over
 //			Serial.println(buffer);
 
 			// update steering servo
-			Serial.print(F("in: "));
-			Serial.print(message[PROT_STICK_RX],DEC);
-			Serial.print(F("   "));
+//			Serial.print(F("in: "));
+//			Serial.print(message[PROT_STICK_RX],DEC);
+//			Serial.print(F("   "));
 
 
 
