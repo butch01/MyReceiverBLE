@@ -1,17 +1,28 @@
+#define IS_BLE_HW_SERIAL 1
+#define IS_DEBUG_SW_SERIAL 0
+#define IS_DEBUG 1
+
+
 #include <FastCRC.h>
 #include <EnhancedServo.h>
 #include "MotorDriverTB6612FNG.h"
-#include "Servo.h"
-#include "SoftwareSerial.h"
+//#include "Servo.h"
+//#include "MegaServo.h"
+
+// define software serial, if IS_BLE_HW_SERIAL is set to 0
+#if IS_BLE_HW_SERIAL == 0
+	#define BLE_SERIAL_NAME BLESerial
+	//#include "SoftwareSerial.h"
+	//#include "SoftwareServo.h"
+	#include "NeoSWSerial.h"
+	NeoSWSerial BLE_SERIAL_NAME(A4, A5); // RX, TX
+#else
+	#define BLE_SERIAL_NAME Serial
+#endif
 
 
-#define IS_DEBUG 0
-
-
-SoftwareSerial BTHM10(A4, A5); // RX, TX
-#define BLE_BAUD 38400
-
-#define SERIAL_BAUD 57600
+#define BLE_BAUD 57600
+#define DEBUG_BAUD 19200
 
 // Protocol definition
 #define PROT_ARRAY_LENGTH 17
@@ -51,43 +62,52 @@ const unsigned long protocolTimeout = PROT_TIMEOUT;
 
 
 //  STEERING SERVO
-#define STEERING_SERVO_PIN 10 // need to use PWM Port
+#define STEERING_SERVO_PIN A7 // need to use PWM Port
 #define STEERING_SERVO_LEFT_MAX 25
 #define STEERING_SERVO_RIGHT_MAX 155
 #define STEERING_SERVO_TRIM 0
 
 #define DEJITTER_STEPS 100
+uint8_t steeringServoLastValue = 90;
 
 //EnhancedServo steeringServo;
-EnhancedServo steeringServo;
+MegaServo steeringServo;
+//EnhancedServo steeringServo;
+//Servo steeringServo;
 
 
 // MOTOR DRIVER TB6612FNG
 
-#define MOTOR_2_PWM 9
-#define MOTOR_2_IN_1 8
-#define MOTOR_2_IN_2 7
-#define MOTOR_2_STDBY 6
 
-#define MOTOR_1_IN_1 5
-#define MOTOR_1_IN_2 4
-#define MOTOR_1_PWM 3
-#define MOTOR_1_STDBY  6
+#define MOTOR_A_IN_1 	A4
+#define MOTOR_A_IN_2 	A5
+#define MOTOR_A_PWM  	3
+#define MOTOR_A_STDBY  	9
+
+//#define MOTOR_B_PWM 	6
+//#define MOTOR_B_IN_1 	7
+//#define MOTOR_B_IN_2 	A6
+//#define MOTOR_B_STDBY 	9
+
 
 MotorDriverTB6612FNG motor;
 
 
 void debug(char *logString)
 {
-	#if IS_DEBUG == 1
-		Serial.print(logString);
+	#if IS_BLE_HW_SERIAL == 0
+		#if IS_DEBUG == 1
+			Serial.print(logString);
+		#endif
 	#endif
 }
 
 void debug(long longValue)
 {
-	#if IS_DEBUG == 1
-		Serial.print(longValue);
+	#if IS_BLE_HW_SERIAL == 0
+		#if IS_DEBUG == 1
+			Serial.print(longValue);
+		#endif
 	#endif
 }
 
@@ -104,16 +124,24 @@ void swapMessage()
 
 }
 
-
+// writes to BLE interface
+void writeBLEln(char *stringToWrite)
+{
+	BLE_SERIAL_NAME.println(stringToWrite);
+}
 
 void setup() {
-  // Open serial communications and wait for port to open:
-  Serial.begin(SERIAL_BAUD);
+  // Open //Serial communications and wait for port to open:
+	#if IS_BLE_HW_SERIAL == 0
+	Serial.begin(DEBUG_BAUD);
+  	#endif
+	BLE_SERIAL_NAME.begin(BLE_BAUD);
+
   while (!Serial)
   {
-    ; // wait for serial port to connect. Needed for native USB port only
+    ; // wait for //Serial port to connect. Needed for native USB port only
   }
-  Serial.println("starting");
+  debug("starting\n");
 
   // clear message
   for (int i=0; i< sizeof(rawMessage);i++)
@@ -122,21 +150,22 @@ void setup() {
 	message[i]=0;
   }
 
-  // set the data rate for the SoftwareSerial port
-  BTHM10.begin(BLE_BAUD);
-  BTHM10.println("AT+ROLE0");
+  // init BLE
+  writeBLEln("AT+ROLE0");
   delay(200);
-  BTHM10.println("AT+POWE2");
+  writeBLEln("AT+POWE2");
   delay(200);
 
   // setup the servo
   steeringServo.attach(STEERING_SERVO_PIN);
-  steeringServo.setMaxValue(STEERING_SERVO_RIGHT_MAX);
-  steeringServo.setMinValue(STEERING_SERVO_LEFT_MAX);
-  steeringServo.setTrim(STEERING_SERVO_TRIM);
+//  steeringServo.setMaxValue(STEERING_SERVO_RIGHT_MAX);
+//  steeringServo.setMinValue(STEERING_SERVO_LEFT_MAX);
+//  steeringServo.setTrim(STEERING_SERVO_TRIM);
+  steeringServo.write(90);
 
   // setup the motor
-  motor = MotorDriverTB6612FNG(MOTOR_1_IN_1, MOTOR_1_IN_2, MOTOR_1_PWM, MOTOR_1_STDBY);
+  //motor = MotorDriverTB6612FNG(MOTOR_B_IN_1, MOTOR_B_IN_2, MOTOR_B_PWM, MOTOR_B_STDBY);
+  motor = MotorDriverTB6612FNG(MOTOR_A_IN_1, MOTOR_A_IN_2, MOTOR_A_PWM, MOTOR_A_STDBY);
 
 }
 /**
@@ -155,33 +184,33 @@ void leftShiftMessageBytes ()
 void debugMessages()
 {
 	char buffer[2];
-	Serial.print("rawMessage: ");
+	//Serial.print("rawMessage: ");
 	for (int i=sizeof(rawMessage)-1; i>= 0; i--)
 	{
 		sprintf(buffer, "%02X ", rawMessage[i]);
-		Serial.print(buffer);
+		//Serial.print(buffer);
 	}
-	Serial.print("  rCRC: ");
+	//Serial.print("  rCRC: ");
 	sprintf(buffer, "%02X ", messageCRC);
-	Serial.print(buffer);
-	Serial.print ("  cCRC: ");
+	//Serial.print(buffer);
+	//Serial.print ("  cCRC: ");
 	sprintf(buffer, "%02X ", CRC8.smbus(rawMessage, sizeof(rawMessage)));
-	Serial.println(buffer);
+	//Serial.println(buffer);
 
 
 
-	Serial.print("   Message: ");
+	//Serial.print("   Message: ");
 	for (int i=sizeof(message)-1; i>= 0; i--)
 	{
 		sprintf(buffer, "%02X ", message[i]);
-		Serial.print(buffer);
+		//Serial.print(buffer);
 	}
-	Serial.print("  rCRC: ");
+	//Serial.print("  rCRC: ");
 	sprintf(buffer, "%02X ", messageCRC);
-	Serial.print(buffer);
-	Serial.print ("  cCRC: ");
+	//Serial.print(buffer);
+	//Serial.print ("  cCRC: ");
 	sprintf(buffer, "%02X ", CRC8.smbus(message, sizeof(message)));
-	Serial.println(buffer);
+	//Serial.println(buffer);
 
 
 
@@ -199,8 +228,8 @@ void rightShiftMessageBytes ()
 bool isTimeout()
 {
 	long timeDiff = millis() - protocolTimeout - messageReceivedTime;
-//	Serial.print("timeoutCalc: ");
-//	Serial.println(timeDiff);
+//	//Serial.print("timeoutCalc: ");
+//	//Serial.println(timeDiff);
 
 	if (timeDiff > 0)
 	{
@@ -224,13 +253,13 @@ void processEmergencyProtocolTimeout()
 }
 
 void loop() { // run over and over
-	if (BTHM10.available() > 0)
+	if (BLE_SERIAL_NAME.available() > 0)
 	{
 		// shift old bytes
 		leftShiftMessageBytes();
 
 		// read new byte
-		messageCRC = (uint8_t) BTHM10.read();
+		messageCRC = (uint8_t) BLE_SERIAL_NAME.read();
 		messageBytesRead++;
 
 		// check if we have read enough bytes (more than protocol length)
@@ -245,8 +274,8 @@ void loop() { // run over and over
 			{
 				// mark message as valid
 				isMessageValid = true;
-				//Serial.print("isMessageValid=");
-				//Serial.println(isMessageValid);
+				////Serial.print("isMessageValid=");
+				////Serial.println(isMessageValid);
 
 				// update timestamp
 				messageReceivedTime = millis();
@@ -254,48 +283,48 @@ void loop() { // run over and over
 				// reset BytesReadCounter
 				messageBytesRead = 0;
 
-				//Serial.write(message, sizeof(message));
-				//Serial.println("CRC OK");
+				////Serial.write(message, sizeof(message));
+				////Serial.println("CRC OK");
 			}
 			else
 			{
-				//Serial.println("CRC FAILURE");
+				////Serial.println("CRC FAILURE");
 			}
 		}
 
 	}
 
 
-//	Serial.print("valid=");
-//	Serial.println(isMessageValid);
+//	//Serial.print("valid=");
+//	//Serial.println(isMessageValid);
 	if (isMessageValid)
 	{
 		// we have a valid message
 		if (isTimeout())
 		{
 			// set message as invalid
-			//Serial.println("timeout");
+			////Serial.println("timeout");
 			isMessageValid = false;
 			processEmergencyProtocolTimeout();
 		}
 		else
 		{
 			// not in timeout
-			//Serial.write(message, sizeof(message));
+			////Serial.write(message, sizeof(message));
 
-//			Serial.print("servo: ");
+//			//Serial.print("servo: ");
 //			char buffer[2];
 //			sprintf(buffer, "%03d ", message[PROT_STICK_RX]);
-//			Serial.print(buffer);
+//			//Serial.print(buffer);
 //
-//			Serial.print(" motor: ");
+//			//Serial.print(" motor: ");
 //			sprintf(buffer, "%03d ", message[PROT_STICK_LY]);
-//			Serial.println(buffer);
+//			//Serial.println(buffer);
 
 			// update steering servo
-//			Serial.print(F("in: "));
-//			Serial.print(message[PROT_STICK_RX],DEC);
-//			Serial.print(F("   "));
+//			//Serial.print(F("in: "));
+//			//Serial.print(message[PROT_STICK_RX],DEC);
+//			//Serial.print(F("   "));
 
 
 
@@ -318,7 +347,15 @@ void loop() { // run over and over
 
 			// reverse
 			steering = map(steering,0,255,255,0);
-			steeringServo.enhancedWrite(steering);
+
+			// map steering to servo range
+			steering = map(steering,0,255,0,180);
+			//steeringServo.enhancedWrite(steering);
+			if (steering != steeringServoLastValue)
+			{
+				steeringServo.write(steering);
+			}
+			steeringServoLastValue = steering;
 
 			//uint8_t steeringValue = map((int) message[PROT_STICK_RX], 0, 255, 0, 180);
 			//steeringServo.write((int) message[PROT_STICK_RX]);
@@ -334,6 +371,8 @@ void loop() { // run over and over
 			isMessageValid = false;
 		}
 	}
+	// refresh servo
+	//steeringServo.refresh();
 
 
 
