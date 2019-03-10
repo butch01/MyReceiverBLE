@@ -21,7 +21,9 @@
 #endif
 
 
-#define BLE_BAUD 57600
+#define BLE_SEND_ACK 1
+
+#define BLE_BAUD 19200
 #define DEBUG_BAUD 19200
 
 // Protocol definition
@@ -43,6 +45,7 @@
 #define PROT_LEFT 14
 #define PROT_RIGHT 15
 #define PROT_DIGITAL_BUTTONS 16
+#define PROT_PACKET_NUMBER 16	// packetnumber, currently replaces DIGITAL_BUTTONS which are no longer sent
 #define PROT_DIGITAL_START 0
 #define PROT_DIGITAL_SELECT 1
 #define PROT_DIGITAL_STICK_BTN_L 2
@@ -94,6 +97,8 @@ EnhancedServo steeringServo;
 
 MotorDriverTB6612FNG motor;
 
+
+uint8_t bleLastPacketNumber = 0;
 
 void debug(char *logString)
 {
@@ -301,6 +306,33 @@ void loop() { // run over and over
 //	//Serial.println(isMessageValid);
 	if (isMessageValid)
 	{
+		uint8_t currentPacketNumber = message[PROT_PACKET_NUMBER];
+		uint8_t diff = currentPacketNumber - bleLastPacketNumber;
+
+		String sendString;
+		#if BLE_SEND_ACK == 1
+			// do only send on duplicate packet
+			if (diff == 0 )
+			{
+				sendString = "dup ";
+				sendString += currentPacketNumber;
+			}
+			else if (diff > 1)
+			{
+				sendString = "loss ";
+				sendString+= currentPacketNumber;
+				sendString+= " ";
+				sendString+= diff;
+			}
+			BLE_SERIAL_NAME.print(sendString);
+		#endif
+		bleLastPacketNumber = currentPacketNumber;
+
+
+
+
+
+
 		// we have a valid message
 		if (isTimeout())
 		{
