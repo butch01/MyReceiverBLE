@@ -62,17 +62,17 @@ const unsigned long protocolTimeout = PROT_TIMEOUT;
 
 
 //  STEERING SERVO
-#define STEERING_SERVO_PIN A7 // need to use PWM Port
+#define STEERING_SERVO_PIN 2 // need to use Digital IO Port. Analog Ports do are not working :(
 #define STEERING_SERVO_LEFT_MAX 25
 #define STEERING_SERVO_RIGHT_MAX 155
 #define STEERING_SERVO_TRIM 0
 
-#define DEJITTER_STEPS 100
+#define DEJITTER_STEPS 255
 uint8_t steeringServoLastValue = 90;
 
 //EnhancedServo steeringServo;
-MegaServo steeringServo;
-//EnhancedServo steeringServo;
+//MegaServo steeringServo;
+EnhancedServo steeringServo;
 //Servo steeringServo;
 
 
@@ -83,6 +83,8 @@ MegaServo steeringServo;
 #define MOTOR_A_IN_2 	A5
 #define MOTOR_A_PWM  	3
 #define MOTOR_A_STDBY  	9
+
+#define IS_SPEED_REVERSE 1
 
 //#define MOTOR_B_PWM 	6
 //#define MOTOR_B_IN_1 	7
@@ -158,9 +160,9 @@ void setup() {
 
   // setup the servo
   steeringServo.attach(STEERING_SERVO_PIN);
-//  steeringServo.setMaxValue(STEERING_SERVO_RIGHT_MAX);
-//  steeringServo.setMinValue(STEERING_SERVO_LEFT_MAX);
-//  steeringServo.setTrim(STEERING_SERVO_TRIM);
+  steeringServo.setMaxValue(STEERING_SERVO_RIGHT_MAX);
+  steeringServo.setMinValue(STEERING_SERVO_LEFT_MAX);
+  steeringServo.setTrim(STEERING_SERVO_TRIM);
   steeringServo.write(90);
 
   // setup the motor
@@ -353,7 +355,7 @@ void loop() { // run over and over
 			//steeringServo.enhancedWrite(steering);
 			if (steering != steeringServoLastValue)
 			{
-				steeringServo.write(steering);
+				steeringServo.enhancedWrite(steering);
 			}
 			steeringServoLastValue = steering;
 
@@ -366,7 +368,15 @@ void loop() { // run over and over
 			debug ( "\n");
 
 			// update motor
-			motor.movePWMTwoWay(message[PROT_STICK_LY], 0, 255);
+
+			//
+
+			uint8_t speed = message[PROT_STICK_LY];
+			#if IS_SPEED_REVERSE == 1
+				speed = map(speed, 0,255,255,0);
+			#endif
+			motor.movePWMTwoWay(speed, 0, 255);
+
 			// invalidate message, because it has been processed
 			isMessageValid = false;
 		}
